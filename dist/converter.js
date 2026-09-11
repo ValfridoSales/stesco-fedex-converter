@@ -7,9 +7,9 @@
 
   const FEDEX_HEADERS = [
     "poNumber", "reference", "senderContactName", "senderCompany", "senderContactNumber", "senderEmail",
-    "senderLine1", "senderLine2", "senderPostcode", "senderProvince", "senderCity", "senderCountry",
+    "senderLine1", "senderLine2", "senderPostcode", "senderState", "senderCity", "senderCountry",
     "recipientContactName", "recipientCompany", "recipientContactNumber", "recipientEmail", "recipientLine1",
-    "recipientLine2", "recipientLine3", "recipientPostcode", "recipientProvince", "recipientCity",
+    "recipientLine2", "recipientLine3", "recipientPostcode", "recipientState", "recipientCity",
     "recipientCountry", "packageType", "numberOfPackages", "packageWeight", "weightUnits", "length", "width",
     "height", "currencyType", "oneRatePricing", "commodityType", "itemDescription", "harmonizedCode",
     "manufacturingCountry", "commodityQuantity", "commodityMeasureUnit", "commodityWeight", "customsValue",
@@ -142,8 +142,11 @@
     return clean(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
+  // Keep UI and saved settings compatible; FedEx calls province fields "State".
+  const EXPORT_FIELD_KEYS = { senderState: "senderProvince", recipientState: "recipientProvince" };
+
   function emptyFedExRow() {
-    return Object.fromEntries(FEDEX_HEADERS.map(header => [header, ""]));
+    return Object.fromEntries(FEDEX_HEADERS.map(header => [EXPORT_FIELD_KEYS[header] || header, ""]));
   }
 
   function convertRecord(source, settings) {
@@ -229,15 +232,48 @@
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }
 
+  function convertFiles(files, settings) {
+    return files.flatMap((file, fileIndex) => {
+      try {
+        return convertCsv(file.text, settings).map(row => ({ ...row, sourceFile: file.name, sourceFileIndex: fileIndex }));
+      } catch (error) { throw new Error(`${file.name}: ${error.message}`); }
+    });
+  }
+
+  function duplicateIndexes(rows) {
+    const seen = new Set();
+    const duplicates = [];
+    rows.forEach((row, index) => {
+      if (!row.sourceOrder || !row.sourceLine) return;
+      const key = JSON.stringify([row.sourceOrder, row.sourceLine]);
+      if (seen.has(key) && !row.duplicateConfirmed) duplicates.push(index);
+      seen.add(key);
+    });
+    return duplicates;
+  }
+
   function exportFedExCsv(shipments) {
     const lines = [FEDEX_HEADERS.map(csvEscape).join(",")];
     shipments.forEach(shipment => {
-      lines.push(FEDEX_HEADERS.map(header => csvEscape(shipment.fedex[header])).join(","));
+      lines.push(FEDEX_HEADERS.map(header => {
+        const row = shipment.fedex;
+        let value = row[EXPORT_FIELD_KEYS[header] || header];
+        if (header === "senderState" || header === "recipientState") {
+          const country = header === "senderState" ? row.senderCountry : row.recipientCountry;
+          if (normalizeCountry(country) === "CA") {
+            const code = clean(value).toUpperCase();
+            value = ({ QC: "PQ", NL: "NF" })[code] || code;
+          }
+        }
+        return csvEscape(value);
+      }).join(","));
     });
     return `${lines.join("\r\n")}\r\n`;
   }
 
   return {
+    convertFiles,
+    duplicateIndexes,
     FEDEX_HEADERS,
     REQUIRED_FLUTE_HEADERS,
     REQUIRED_FEDEX_FIELDS,

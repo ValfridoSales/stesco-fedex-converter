@@ -126,6 +126,13 @@ button { cursor: pointer; }
 .file-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-summary span { color: var(--muted); font-size: 13px; }
 .toolbar-actions { display: flex; gap: 10px; }
+.toolbar-actions { flex-wrap: wrap; align-items: center; }
+.csv-tile { display: inline-flex; align-items: center; gap: 9px; max-width: 260px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); cursor: grab; font-size: 14px; text-align: left; }
+.csv-tile[hidden] { display: none; }
+.csv-tile:active { cursor: grabbing; }
+.csv-tile:focus-visible { outline: 3px solid var(--indigo); outline-offset: 2px; }
+.csv-tile .file-icon { width: 32px; height: 34px; }
+#csv-tile-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .metric { min-height: 94px; display: flex; flex-direction: column; justify-content: space-between; padding: 17px 18px; border: 1px solid var(--line); border-radius: 14px; background: white; }

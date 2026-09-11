@@ -14,14 +14,20 @@ python -m http.server 8000 --directory dist
 
 Then open `http://localhost:8000`.
 
-1. Drop a Flute CSV onto the upload area.
+1. Drop one or more Flute CSV files onto the upload area. Use Add CSV files to extend the current batch.
 2. Review any highlighted rows.
 3. Correct shipment details when needed.
-4. Download the FedEx CSV.
+4. Resolve repeated Flute order-and-line combinations by removing the extra row or selecting Keep intentionally.
+5. Download one combined FedEx CSV.
+
+Each review row shows its source filename and CSV row number. If any newly selected file is invalid, none of that selection is added; the existing batch remains intact. Repeated PO numbers alone do not count as duplicates. Clear starts a new batch.
 
 Files are processed in browser memory. The app does not upload or retain order data. Shipment defaults are saved only in the current browser.
 
 ## Conversion rules
+
+- Province values export under FedEx's `senderState` and `recipientState` headers. Existing saved sender defaults remain compatible.
+- For Canadian addresses, the export translates `QC` to FedEx's `PQ` and `NL` to `NF` for both sender and recipient. Editable values and saved defaults retain their original codes.
 
 - FedEx `poNumber` comes from Flute `billing_po`.
 - `numberOfPackages` comes from `order_qty`.
@@ -50,5 +56,7 @@ The same test runs automatically in GitHub Actions whenever code is pushed or a 
 - `tests/converter.test.cjs` — conversion regression test
 
 ## Data handling
+
+When all rows pass validation and duplicate review, a CSV tile appears beside the download controls. Dragging it supplies a generated CSV File to the browser drag operation; clicking it downloads the same file. Cross-website file transfer remains experimental and must be tested with the receiving FedEx portal and browser. The download button remains available.
 
 The repository contains no customer order files. Test data is generated inside the automated test. Files selected in the application remain in browser memory and are not uploaded.
