@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Convert Flute order exports into validated FedEx batch CSV files." />
+    <title>Stesco FedEx Batch Converter</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">S</div>
+      <div class="brand-copy">
+        <strong>Stesco</strong>
+        <span>Business Systems</span>
+      </div>
+      <span class="pilot-badge" title="Testing version">Pilot 1.0</span>
+      <div class="route-mark" aria-label="Flute to FedEx converter">
+        <span>Flute</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg>
+        <span>FedEx</span>
+      </div>
+      <button class="button button-ghost" id="open-settings" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3 14H3v-4h.08A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.64 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.64a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.36 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        Shipment defaults
+      </button>
+    </header>
+
+    <main class="workspace">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Shipping operations</p>
+          <h1 id="page-title">FedEx batch converter</h1>
+          <p>Drop in a Flute export, review the shipment lines, and download a FedEx-ready CSV.</p>
+        </div>
+        <div class="privacy-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3"/><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M12 14v3"/></svg>
+          <div><strong>Processed on this device</strong><span>Your order file is never uploaded.</span></div>
+        </div>
+      </section>
+
+      <section class="upload-card" id="drop-zone" aria-labelledby="upload-title">
+        <input id="file-input" type="file" accept=".csv,text/csv" hidden />
+        <div class="upload-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+        </div>
+        <div class="upload-copy">
+          <h2 id="upload-title">Drop your Flute CSV here</h2>
+          <p>or choose a file from your computer</p>
+        </div>
+        <button class="button button-primary" id="choose-file" type="button">Choose CSV</button>
+        <span class="file-hint">CSV only · one FedEx row per Flute line</span>
+      </section>
+
+      <section class="results" id="results" hidden aria-live="polite">
+        <div class="results-toolbar">
+          <div class="file-summary">
+            <div class="file-icon" aria-hidden="true">CSV</div>
+            <div>
+              <strong id="file-name">Flute export</strong>
+              <span id="file-meta">0 shipment lines</span>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="button button-ghost" id="clear-file" type="button">Clear</button>
+            <button class="button button-primary" id="download" type="button" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>
+              Download FedEx CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="metrics" aria-label="Conversion summary">
+          <article class="metric">
+            <span>Shipment lines</span>
+            <strong id="metric-total">0</strong>
+          </article>
+          <article class="metric metric-ready">
+            <span>Ready</span>
+            <strong id="metric-ready">0</strong>
+          </article>
+          <article class="metric metric-review">
+            <span>Needs review</span>
+            <strong id="metric-review">0</strong>
+          </article>
+          <article class="metric">
+            <span>FedEx columns</span>
+            <strong>70</strong>
+          </article>
+        </div>
+
+        <div class="validation-banner" id="validation-banner" data-state="ready">
+          <div class="banner-icon" aria-hidden="true">
+            <svg class="icon-ready" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
+            <svg class="icon-review" viewBox="0 0 24 24"><path d="M12 8v5m0 4h.01"/><path d="M10.3 3.8 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg>
+          </div>
+          <div>
+            <strong id="validation-title">Ready to export</strong>
+            <span id="validation-copy">All required FedEx fields are complete.</span>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-heading">
+            <div>
+              <h2>Shipment review</h2>
+              <p>Open a row to correct any shipment detail before exporting.</p>
+            </div>
+            <div class="legend"><span class="status-dot"></span> Ready <span class="status-dot status-dot-review"></span> Review</div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Status</th>
+                  <th scope="col">Customer PO</th>
+                  <th scope="col">Reference</th>
+                  <th scope="col">Attention</th>
+                  <th scope="col">Recipient company</th>
+                  <th scope="col">Destination</th>
+                  <th scope="col" class="numeric">Packages</th>
+                  <th scope="col">Weight</th>
+                  <th scope="col">Dimensions</th>
+                  <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="shipment-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="settings-dialog" class="modal">
+      <form method="dialog" id="settings-form">
+        <div class="modal-header">
+          <div><p class="eyebrow">Applied to every row</p><h2>Shipment defaults</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close settings" type="submit">×</button>
+        </div>
+        <div class="form-section">
+          <h3>Sender</h3>
+          <div class="form-grid" id="sender-fields"></div>
+        </div>
+        <div class="form-section">
+          <h3>Shared shipment values</h3>
+          <div class="form-grid" id="shared-fields"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="button button-ghost" value="cancel" type="submit">Cancel</button>
+          <button class="button button-primary" id="save-settings" value="default" type="submit">Save defaults</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="row-dialog" class="modal modal-wide">
+      <form method="dialog" id="row-form">
+        <div class="modal-header">
+          <div><p class="eyebrow" id="row-dialog-eyebrow">Shipment line</p><h2 id="row-dialog-title">Review shipment</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close shipment review" type="submit">×</button>
+        </div>
+        <div class="dialog-errors" id="row-errors" hidden></div>
+        <div class="form-section">
+          <h3>Reference and recipient</h3>
+          <div class="form-grid" id="row-recipient-fields"></div>
+        </div>
+        <div class="form-section">
+          <h3>Package</h3>
+          <div class="form-grid" id="row-package-fields"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="button button-ghost" value="cancel" type="submit">Cancel</button>
+          <button class="button button-primary" id="save-row" value="default" type="submit">Save shipment</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <footer class="app-footer">
+      <span>Stesco FedEx Batch Converter · Pilot 1.0</span>
+      <span>Files are processed locally and are not uploaded.</span>
+    </footer>
+
+    <script src="converter.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

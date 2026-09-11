@@ -1,0 +1,7 @@
+.sites-runtime/
+pilot-package/
+scripts/build-standalone.cjs
+*.csv
+*.xlsx
+*.log
+.DS_Store
