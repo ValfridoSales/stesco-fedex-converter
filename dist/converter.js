@@ -105,7 +105,7 @@
   function rowsToObjects(rows) {
     const headers = rows[0].map(clean);
     const duplicates = headers.filter((header, index) => header && headers.indexOf(header) !== index);
-    if (duplicates.length) throw new Error(`The CSV contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
+    if (duplicates.length) throw new Error(`The Flute file contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
     const missing = REQUIRED_FLUTE_HEADERS.filter(header => !headers.includes(header));
     if (missing.length) throw new Error(`This does not look like the expected Flute export. Missing columns: ${missing.join(", ")}.`);
     return rows.slice(1).filter(row => row.some(value => clean(value) !== "")).map((row, rowIndex) => {
@@ -142,6 +142,12 @@
     return clean(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
 
+  function normalizeProvince(value, country) {
+    const code = clean(value).toUpperCase();
+    if (normalizeCountry(country) !== "CA") return code;
+    return ({ SA: "SK" })[code] || code;
+  }
+
   // Keep UI and saved settings compatible; FedEx calls province fields "State".
   const EXPORT_FIELD_KEYS = { senderState: "senderProvince", recipientState: "recipientProvince" };
 
@@ -173,7 +179,7 @@
       recipientLine2: clean(source.ship_add2),
       recipientLine3: "",
       recipientPostcode: normalizePostcode(source.ship_posta),
-      recipientProvince: clean(source.ship_prov).toUpperCase(),
+      recipientProvince: normalizeProvince(source.ship_prov, source.ship_count),
       recipientCity: clean(source.ship_city).toUpperCase(),
       recipientCountry: normalizeCountry(source.ship_count),
       packageType: clean(settings.packageType),
@@ -220,8 +226,11 @@
   }
 
   function convertCsv(text, settings) {
-    const parsed = parseCsv(text);
-    const sourceRows = rowsToObjects(parsed);
+    return convertRows(parseCsv(text), settings);
+  }
+
+  function convertRows(rows, settings) {
+    const sourceRows = rowsToObjects(rows);
     if (!sourceRows.length) throw new Error("The Flute export contains headers but no shipment lines.");
     const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
     return sourceRows.map(source => convertRecord(source, effectiveSettings));
@@ -235,7 +244,10 @@
   function convertFiles(files, settings) {
     return files.flatMap((file, fileIndex) => {
       try {
-        return convertCsv(file.text, settings).map(row => ({ ...row, sourceFile: file.name, sourceFileIndex: fileIndex }));
+        const converted = Array.isArray(file.rows)
+          ? convertRows(file.rows, settings)
+          : convertCsv(file.text, settings);
+        return converted.map(row => ({ ...row, sourceFile: file.name, sourceFileIndex: fileIndex }));
       } catch (error) { throw new Error(`${file.name}: ${error.message}`); }
     });
   }
@@ -262,7 +274,7 @@
           const country = header === "senderState" ? row.senderCountry : row.recipientCountry;
           if (normalizeCountry(country) === "CA") {
             const code = clean(value).toUpperCase();
-            value = ({ QC: "PQ", NL: "NF" })[code] || code;
+            value = ({ SA: "SK", QC: "PQ", NL: "NF" })[code] || code;
           }
         }
         return csvEscape(value);
@@ -283,11 +295,13 @@
     rowsToObjects,
     findProduct,
     convertCsv,
+    convertRows,
     convertRecord,
     validateFedExRow,
     exportFedExCsv,
     normalizeCountry,
     normalizeCurrency,
-    normalizePostcode
+    normalizePostcode,
+    normalizeProvince
   };
 });

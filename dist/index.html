@@ -40,34 +40,24 @@
       </section>
 
       <section class="upload-card" id="drop-zone" aria-labelledby="upload-title">
-        <input id="file-input" type="file" accept=".csv,text/csv" multiple hidden />
+        <input id="file-input" type="file" accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" multiple hidden />
         <div class="upload-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
         </div>
         <div class="upload-copy">
-          <h2 id="upload-title">Drop your Flute CSV files here</h2>
+          <h2 id="upload-title">Drop your Flute files here</h2>
           <p>Choose one or more files for a combined FedEx CSV</p>
         </div>
-        <button class="button button-primary" id="choose-file" type="button">Choose CSV files</button>
-        <span class="file-hint">CSV only · one FedEx row per Flute line</span>
+        <button class="button button-primary" id="choose-file" type="button">Choose Flute files</button>
+        <span class="file-hint">XLS, XLSX, or CSV · one FedEx row per Flute line</span>
       </section>
 
       <p id="upload-error" role="alert" hidden></p>
       <section class="results" id="results" hidden aria-live="polite">
         <div class="results-toolbar">
-          <div class="file-summary">
-            <div class="file-icon" aria-hidden="true">CSV</div>
-            <div>
-              <strong id="file-name">Flute export</strong>
-              <span id="file-meta">0 shipment lines</span>
-            </div>
-          </div>
+          <div id="source-file-list" class="source-file-list" role="list" aria-label="Uploaded Flute files"></div>
           <div class="toolbar-actions">
-            <button class="csv-tile" id="csv-tile" type="button" draggable="true" hidden title="Drag CSV file or click to download">
-              <span class="file-icon" aria-hidden="true">CSV</span>
-              <span id="csv-tile-name"></span>
-            </button>
-            <button class="button button-ghost" id="add-files" type="button">Add CSV files</button>
+            <button class="button button-ghost" id="add-files" type="button">Add files</button>
             <button class="button button-ghost" id="clear-file" type="button">Clear</button>
             <button class="button button-primary" id="download" type="button" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>
@@ -189,6 +179,8 @@
       <span>Files are processed locally and are not uploaded.</span>
     </footer>
 
+    <script src="xlsx.full.min.js"></script>
+    <script src="importer.js"></script>
     <script src="converter.js"></script>
     <script src="app.js"></script>
   </body>

@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const C = require("../dist/converter.js");
+const XLSX = require("../dist/xlsx.full.min.js");
+const I = require("../dist/importer.js");
 
 const inputHeaders = [
   "billing_po", "ship_nme", "ship_nme2", "ship_add1", "ship_add2", "ship_city", "ship_prov",
@@ -62,6 +64,16 @@ const foreign = { fedex: { ...shipments[0].fedex, senderCountry: "US", recipient
 const foreignValues = C.parseCsv(C.exportFedExCsv([foreign]))[1];
 assert.equal(foreignValues[outputRows[0].indexOf("senderState")], "QC", "Canadian aliases must not apply to other countries");
 assert.equal(foreignValues[outputRows[0].indexOf("recipientState")], "NL");
+
+const saskatchewanInput = input.replace(",ON,M1M 1M1,CANADA,", ",SA,M1M 1M1,CANADA,");
+const saskatchewan = C.convertCsv(saskatchewanInput, C.DEFAULT_SETTINGS);
+assert.equal(saskatchewan[0].fedex.recipientProvince, "SK", "Flute SA must normalize to Saskatchewan SK during import");
+const saskatchewanOutput = C.parseCsv(C.exportFedExCsv([saskatchewan[0]]));
+assert.equal(saskatchewanOutput[1][saskatchewanOutput[0].indexOf("recipientState")], "SK", "Saskatchewan must export to FedEx as SK");
+assert.equal(C.normalizeProvince("SK", "Canada"), "SK", "Valid Saskatchewan SK must remain unchanged");
+assert.equal(C.normalizeProvince("SA", "US"), "SA", "Flute's Canadian alias must not be applied to other countries");
+const manuallyEditedSa = { fedex: { ...shipments[0].fedex, recipientProvince: "SA" } };
+assert.equal(C.parseCsv(C.exportFedExCsv([manuallyEditedSa]))[1][outputRows[0].indexOf("recipientState")], "SK", "A manually entered Canadian SA must export as SK");
 assert.equal(outputRows.length, 7, "Export must contain one header plus six data rows");
 assert.ok(outputRows.every(row => row.length === 70), "Every output row must contain all 70 FedEx columns");
 
@@ -92,4 +104,31 @@ repeated[6].duplicateConfirmed = true;
 assert.deepEqual(C.duplicateIndexes(repeated), [7, 8, 9, 10, 11]);
 assert.deepEqual(C.duplicateIndexes([{sourceOrder:"",sourceLine:"1"},{sourceOrder:"",sourceLine:"1"}]), [], "Missing order IDs are not treated as duplicate keys");
 assert.throws(() => C.convertFiles([{name:"good.csv",text:input},{name:"bad.csv",text:"wrong\n1"}]), /bad.csv:.*Missing columns/);
-console.log("Passed: conversion, province aliases, combined files, source tracking and duplicate checks.");
+
+const workbook = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([inputHeaders, ...inputRows]), "order_jit_ships");
+for (const bookType of ["xls", "xlsx"]) {
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType });
+  const rows = I.workbookToRows(buffer);
+  const excelShipments = C.convertFiles([{ name: `sample.${bookType}`, type: bookType.toUpperCase(), rows }]);
+  assert.equal(excelShipments.length, shipments.length, `${bookType.toUpperCase()} must import every Flute row`);
+  assert.deepEqual(
+    excelShipments.map(item => item.fedex),
+    shipments.map(item => item.fedex),
+    `${bookType.toUpperCase()} and CSV inputs must produce identical FedEx mappings`
+  );
+  assert.equal(excelShipments[0].sourceFile, `sample.${bookType}`);
+}
+assert.equal(I.fileTypeLabel("ORDER.XLS"), "XLS");
+assert.equal(I.fileTypeLabel("order.xlsx"), "XLSX");
+assert.equal(I.fileTypeLabel("order.csv"), "CSV");
+assert.equal(I.fileTypeLabel("order.txt"), "");
+
+const mixed = C.convertFiles([
+  { name: "one.csv", type: "CSV", text: input },
+  { name: "two.xls", type: "XLS", rows: I.workbookToRows(XLSX.write(workbook, { type: "buffer", bookType: "xls" })) }
+]);
+assert.equal(mixed.length, 12, "Mixed CSV and XLS files must create one combined batch");
+assert.equal(C.parseCsv(C.exportFedExCsv(mixed)).length, 13, "Mixed-file output must contain one header");
+
+console.log("Passed: CSV/XLS/XLSX conversion, SA-to-SK and FedEx province aliases, combined files, source tracking and duplicate checks.");

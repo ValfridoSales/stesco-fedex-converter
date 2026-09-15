@@ -1,6 +1,7 @@
 (function () {
   "use strict";
   const C = window.FedExConverter;
+  const I = window.FluteFileImporter;
   const STORAGE_KEY = "stesco-fedex-converter-settings-v1";
   let settings = loadSettings();
   let shipments = [];
@@ -80,11 +81,7 @@
     const revision = batchRevision;
     $("#upload-error").hidden = true;
     try {
-      const sources = await Promise.all(files.map(async file => {
-        if (!file.name.toLowerCase().endsWith(".csv")) throw new Error(file.name + ": Choose a Flute CSV file.");
-        try { return { name: file.name, size: file.size, text: await file.text() }; }
-        catch { throw new Error(file.name + ": Could not read this file."); }
-      }));
+      const sources = await Promise.all(files.map(file => I.readFluteFile(file)));
       const added = C.convertFiles(sources, settings);
       if (revision !== batchRevision) return;
       added.forEach(row => row.sourceFileIndex += sourceFiles.length);
@@ -111,8 +108,13 @@
   function refreshBatch() {
     dropZone.classList.toggle("has-file", shipments.length > 0);
     results.hidden = !shipments.length;
-    $("#file-name").textContent = sourceFiles.length === 1 ? sourceFiles[0].name : sourceFiles.length + " CSV files combined";
-    $("#file-meta").textContent = shipments.length + " shipment lines · " + sourceFiles.map(file => file.name).join(", ");
+    $("#source-file-list").innerHTML = sourceFiles.map((file, index) => {
+      const count = shipments.filter(row => row.sourceFileIndex === index).length;
+      return `<div class="file-summary" role="listitem">
+        <div class="file-icon file-icon-${escapeHtml((file.type || "CSV").toLowerCase())}" aria-hidden="true">${escapeHtml(file.type || "CSV")}</div>
+        <div><strong>${escapeHtml(file.name)}</strong><span>${count} shipment ${count === 1 ? "line" : "lines"}</span></div>
+      </div>`;
+    }).join("");
     render();
   }
 
@@ -133,8 +135,6 @@
     $("#metric-review").textContent = review;
     const duplicates = C.duplicateIndexes(shipments);
     $("#download").disabled = shipments.length === 0 || review > 0 || duplicates.length > 0;
-    $("#csv-tile").hidden = $("#download").disabled;
-    $("#csv-tile-name").textContent = exportFilename();
     const notice = $("#duplicate-notice");
     notice.hidden = !duplicates.length;
     notice.innerHTML = duplicates.length ? '<strong>Repeated Flute order and line. Resolve each extra occurrence before downloading.</strong>' + duplicates.map(index => {
@@ -156,7 +156,8 @@
   function rowMarkup(shipment, index) {
     const r = shipment.fedex;
     const statusText = shipment.status === "ready" ? "Ready" : "Review";
-    const sourceDetail = [shipment.sourceFile, `CSV row ${shipment.sourceRow}`, shipment.sourceOrder && `Flute ${shipment.sourceOrder}`, shipment.sourceLine && `line ${shipment.sourceLine}`].filter(Boolean).join(" · ");
+    const source = sourceFiles[shipment.sourceFileIndex];
+    const sourceDetail = [shipment.sourceFile, `${source?.type || "CSV"} row ${shipment.sourceRow}`, shipment.sourceOrder && `Flute ${shipment.sourceOrder}`, shipment.sourceLine && `line ${shipment.sourceLine}`].filter(Boolean).join(" · ");
     return `<tr>
       <td><span class="status-pill ${shipment.status === "review" ? "review" : ""}">${statusText}</span></td>
       <td><div class="stacked-cell"><span class="cell-primary">${escapeHtml(r.poNumber || "Missing")}</span><span class="cell-secondary">${escapeHtml(sourceDetail)}</span></div></td>
@@ -296,6 +297,7 @@
     sourceFiles = [];
     batchRevision++;
     $("#upload-error").hidden = true;
+    $("#source-file-list").replaceChildren();
     fileInput.value = "";
     results.hidden = true;
     dropZone.classList.remove("has-file", "is-dragging");
@@ -394,16 +396,6 @@
   });
   $("#clear-file").addEventListener("click", clearFile);
   $("#download").addEventListener("click", downloadCsv);
-  $("#csv-tile").addEventListener("click", downloadCsv);
-  $("#csv-tile").addEventListener("dragstart", event => {
-    const file = exportFile();
-    if (!file || !event.dataTransfer?.items) { event.preventDefault(); return; }
-    try {
-      event.dataTransfer.clearData();
-      if (!event.dataTransfer.items.add(file)) { event.preventDefault(); return; }
-      event.dataTransfer.effectAllowed = "copy";
-    } catch { event.preventDefault(); }
-  });
   $("#open-settings").addEventListener("click", openSettings);
   $("#settings-form").addEventListener("submit", saveSettings);
   $("#row-form").addEventListener("submit", saveRow);

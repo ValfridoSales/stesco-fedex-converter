@@ -122,17 +122,12 @@ button { cursor: pointer; }
 .results-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: white; box-shadow: 0 8px 24px rgba(7,20,38,.05); }
 .file-summary { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .file-icon { width: 44px; height: 44px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; color: white; background: var(--green); font-size: 11px; font-weight: 850; letter-spacing: .05em; }
+.file-icon-xls, .file-icon-xlsx { background: #217346; }
 .file-summary div:last-child { min-width: 0; display: grid; gap: 3px; }
-.file-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-summary strong { overflow-wrap: anywhere; }
+.source-file-list { display: grid; gap: 14px; min-width: 0; flex: 1; }
 .file-summary span { color: var(--muted); font-size: 13px; }
-.toolbar-actions { display: flex; gap: 10px; }
-.toolbar-actions { flex-wrap: wrap; align-items: center; }
-.csv-tile { display: inline-flex; align-items: center; gap: 9px; max-width: 260px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); cursor: grab; font-size: 14px; text-align: left; }
-.csv-tile[hidden] { display: none; }
-.csv-tile:active { cursor: grabbing; }
-.csv-tile:focus-visible { outline: 3px solid var(--indigo); outline-offset: 2px; }
-.csv-tile .file-icon { width: 32px; height: 34px; }
-#csv-tile-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .metric { min-height: 94px; display: flex; flex-direction: column; justify-content: space-between; padding: 17px 18px; border: 1px solid var(--line); border-radius: 14px; background: white; }
