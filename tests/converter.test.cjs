@@ -3,10 +3,7 @@ const C = require("../dist/converter.js");
 const XLSX = require("../dist/xlsx.full.min.js");
 const I = require("../dist/importer.js");
 
-const inputHeaders = [
-  "billing_po", "ship_nme", "ship_nme2", "ship_add1", "ship_add2", "ship_city", "ship_prov",
-  "ship_posta", "ship_count", "order_qty", "docket_id", "docket_txt", "order_id", "order_line", "currency_d"
-];
+const inputHeaders = C.FLUTE_HEADERS;
 const productRows = [
   ["1", "120073", "[FOOLOC-061] Medium Kit"],
   ["2", "120067", "[FOOLOC-060] Small Plus Kit"],
@@ -15,10 +12,15 @@ const productRows = [
   ["1", "121985", "[FOOLOC-072] MED Mailer"],
   ["1", "121986", "[FOOLOC-073] LRG Mailer"]
 ];
-const inputRows = productRows.map(([quantity, docketId, description], index) => [
-  "TEST-PO-1001", "100 TEST STORE", "Attn: Test User", "123 TEST STREET", "", "TORONTO", "ON",
-  "M1M 1M1", "CANADA", quantity, docketId, description, "TEST-ORDER-1", String(index + 1), "CAD"
-]);
+const inputRows = productRows.map(([quantity, docketId, description], index) => {
+  const values = {
+    billing_po: "TEST-PO-1001", ship_nme: "100 TEST STORE", ship_nme2: "Attn: Test User",
+    ship_add1: "123 TEST STREET", ship_add2: "", ship_city: "TORONTO", ship_prov: "ON",
+    ship_posta: "M1M 1M1", ship_count: "CANADA", order_qty: quantity, docket_id: docketId,
+    docket_txt: description, order_id: "TEST-ORDER-1", order_line: String(index + 1), currency_i: "CAD"
+  };
+  return inputHeaders.map(header => values[header] ?? "");
+});
 const input = [inputHeaders, ...inputRows].map(row => row.join(",")).join("\r\n") + "\r\n";
 const templateHeaders = "poNumber,reference,senderContactName,senderCompany,senderContactNumber,senderEmail,senderLine1,senderLine2,senderPostcode,senderProvince,senderCity,senderCountry,recipientContactName,recipientCompany,recipientContactNumber,recipientEmail,recipientLine1,recipientLine2,recipientLine3,recipientPostcode,recipientProvince,recipientCity,recipientCountry,packageType,numberOfPackages,packageWeight,weightUnits,length,width,height,currencyType,oneRatePricing,commodityType,itemDescription,harmonizedCode,manufacturingCountry,commodityQuantity,commodityMeasureUnit,commodityWeight,customsValue,documentType,documentDescription,purposeOfShipment,generateInvoice,etdEnabled,serviceType,soldToPartyCountry,soldToPartyContactName,soldToPartyCompany,soldToPartyLine1,soldToPartyLine2,soldToPartyLine3,soldToPartyCity,soldToPartyState,soldToPartyPostcode,soldToPartyPhoneExtension,soldToPartyContactNumber,soldToPartyTin,soldToPartyEmail,soldToPartyAccountNumber,cpscProductId,cpscProductIdType,cpscDisclaimCode,cpscIntendedUseCode,cpscIntendedUseDescription,cpscProductVersion,cpscCertifierId,euDeMinimisMerchantProductId,euDeMinimisNonStandardManufacturerProductId,euDeMinimisStandardManufacturerProductId".split(",");
 const shipments = C.convertCsv(input, C.DEFAULT_SETTINGS);
@@ -83,8 +85,13 @@ assert.equal(multiline[1][1], 'quoted "value"', "Parser must support escaped quo
 
 assert.throws(
   () => C.convertCsv("billing_po,ship_nme\r\n1,Store\r\n", C.DEFAULT_SETTINGS),
-  /Missing columns/,
+  /layout does not match/,
   "Unexpected Flute schemas must be rejected"
+);
+assert.throws(
+  () => C.convertRows([[...inputHeaders].reverse(), ...inputRows], C.DEFAULT_SETTINGS),
+  /column order has changed/,
+  "Known columns in a changed order must be rejected"
 );
 
 const unknownCsv = input.replace("[FOOLOC-061] Medium Kit", "[FOOLOC-999] Unknown Kit").replace(",120073,", ",999999,");
@@ -103,7 +110,7 @@ assert.deepEqual(C.duplicateIndexes(repeated), [6, 7, 8, 9, 10, 11]);
 repeated[6].duplicateConfirmed = true;
 assert.deepEqual(C.duplicateIndexes(repeated), [7, 8, 9, 10, 11]);
 assert.deepEqual(C.duplicateIndexes([{sourceOrder:"",sourceLine:"1"},{sourceOrder:"",sourceLine:"1"}]), [], "Missing order IDs are not treated as duplicate keys");
-assert.throws(() => C.convertFiles([{name:"good.csv",text:input},{name:"bad.csv",text:"wrong\n1"}]), /bad.csv:.*Missing columns/);
+assert.throws(() => C.convertFiles([{name:"good.csv",text:input},{name:"bad.csv",text:"wrong\n1"}]), /bad.csv:.*layout does not match/);
 
 const workbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([inputHeaders, ...inputRows]), "order_jit_ships");
@@ -131,4 +138,44 @@ const mixed = C.convertFiles([
 assert.equal(mixed.length, 12, "Mixed CSV and XLS files must create one combined batch");
 assert.equal(C.parseCsv(C.exportFedExCsv(mixed)).length, 13, "Mixed-file output must contain one header");
 
-console.log("Passed: CSV/XLS/XLSX conversion, SA-to-SK and FedEx province aliases, combined files, source tracking and duplicate checks.");
+const paperRows = [
+  [],
+  [],
+  C.PAPER_BAGS_HEADERS,
+  ["76", "99020", "FOOT LOCKER CANADA", "MIDTOWN PLAZA", "201 1ST AVENUE SOUTH #T209B", "SASKATOON", " SASK", "S7K1J9", "3", "12"]
+];
+const paper = C.convertRows(paperRows, C.DEFAULT_SETTINGS);
+assert.equal(paper.length, 1, "Every Paper Bags store row must produce one FedEx row");
+assert.equal(paper[0].sourceRow, 4, "Paper Bags source row numbers must account for the two blank rows above the header");
+assert.equal(paper[0].sourceLayout, "paperBags");
+assert.equal(paper[0].validationProfile, "paperBags");
+assert.equal(paper[0].fedex.poNumber, "", "Paper Bags PO must stay blank");
+assert.equal(paper[0].fedex.reference, "Paper Bags");
+assert.equal(paper[0].fedex.recipientContactName, "Store Manager");
+assert.equal(paper[0].fedex.recipientCompany, "99020 FOOT LOCKER CANADA");
+assert.equal(paper[0].fedex.recipientLine1, "201 1ST AVENUE SOUTH #T209B");
+assert.equal(paper[0].fedex.recipientLine2, "MIDTOWN PLAZA");
+assert.equal(paper[0].fedex.recipientCity, "SASKATOON");
+assert.equal(paper[0].fedex.recipientProvince, "SK", "Paper Bags SASK must normalize to SK");
+assert.equal(paper[0].fedex.recipientPostcode, "S7K1J9");
+assert.equal(paper[0].fedex.recipientCountry, "CA");
+assert.equal(paper[0].fedex.numberOfPackages, "12");
+assert.deepEqual([paper[0].fedex.packageWeight, paper[0].fedex.length, paper[0].fedex.width, paper[0].fedex.height], [49, 24, 20, 11]);
+assert.deepEqual(C.validateFedExRow(paper[0].fedex, paper[0].validationProfile), [], "Blank Paper Bags PO must not require review");
+assert.ok(C.validateFedExRow(paper[0].fedex).includes("poNumber is required."), "A blank PO must still be invalid for Flute");
+const paperWithEditedPo = { ...paper[0], fedex: { ...paper[0].fedex, poNumber: "SHOULD-NOT-EXPORT" } };
+const paperOutput = C.parseCsv(C.exportFedExCsv([paperWithEditedPo]));
+assert.equal(paperOutput[1][paperOutput[0].indexOf("poNumber")], "", "Paper Bags PO must remain blank at export");
+assert.throws(
+  () => C.convertRows([C.PAPER_BAGS_HEADERS.map(header => header === "QTY" ? "Quantity" : header), paperRows[3]], C.DEFAULT_SETTINGS),
+  /layout does not match/,
+  "A renamed Paper Bags column must block conversion"
+);
+const mixedLayouts = C.convertFiles([
+  { name: "flute.csv", type: "CSV", text: input },
+  { name: "paper-bags.xlsx", type: "XLSX", rows: paperRows }
+]);
+assert.equal(mixedLayouts.length, 7, "Flute and Paper Bags files must combine into one batch");
+assert.equal(C.parseCsv(C.exportFedExCsv(mixedLayouts)).length, 8, "Mixed-layout output must contain exactly one header");
+
+console.log("Passed: strict Flute/Paper Bags schemas, CSV/XLS/XLSX conversion, province aliases, mixed batches, source tracking and duplicate checks.");

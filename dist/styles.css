@@ -107,6 +107,7 @@ button { cursor: pointer; }
 .upload-copy h2 { margin: 0 0 6px; font-size: 21px; }
 .upload-copy p { margin: 0; color: var(--muted); font-size: 15px; }
 .file-hint { color: #8290a5; font-size: 12px; }
+#upload-error { margin: 16px 0 0; padding: 14px 16px; border: 1px solid #f1bbb5; border-radius: 12px; color: var(--red); background: var(--red-bg); font-size: 14px; font-weight: 650; }
 
 .button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1px solid transparent; border-radius: 10px; font-weight: 750; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }

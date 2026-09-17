@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Convert Flute order exports into validated FedEx batch CSV files." />
+    <meta name="description" content="Convert Flute and Paper Bags exports into validated FedEx batch CSV files." />
     <title>Stesco FedEx Batch Converter</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -15,8 +15,8 @@
         <span>Business Systems</span>
       </div>
       <span class="pilot-badge" title="Testing version">Pilot 1.0</span>
-      <div class="route-mark" aria-label="Flute to FedEx converter">
-        <span>Flute</span>
+      <div class="route-mark" aria-label="Flute and Paper Bags to FedEx converter">
+        <span>Flute + Paper Bags</span>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg>
         <span>FedEx</span>
       </div>
@@ -31,7 +31,7 @@
         <div>
           <p class="eyebrow">Shipping operations</p>
           <h1 id="page-title">FedEx batch converter</h1>
-          <p>Drop in a Flute export, review the shipment lines, and download a FedEx-ready CSV.</p>
+          <p>Drop in Flute or Paper Bags exports, review the shipment lines, and download a FedEx-ready CSV.</p>
         </div>
         <div class="privacy-note">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3"/><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M12 14v3"/></svg>
@@ -45,17 +45,17 @@
           <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
         </div>
         <div class="upload-copy">
-          <h2 id="upload-title">Drop your Flute files here</h2>
+          <h2 id="upload-title">Drop your source files here</h2>
           <p>Choose one or more files for a combined FedEx CSV</p>
         </div>
-        <button class="button button-primary" id="choose-file" type="button">Choose Flute files</button>
-        <span class="file-hint">XLS, XLSX, or CSV · one FedEx row per Flute line</span>
+        <button class="button button-primary" id="choose-file" type="button">Choose files</button>
+        <span class="file-hint">Flute or Paper Bags · XLS, XLSX, or CSV</span>
       </section>
 
       <p id="upload-error" role="alert" hidden></p>
       <section class="results" id="results" hidden aria-live="polite">
         <div class="results-toolbar">
-          <div id="source-file-list" class="source-file-list" role="list" aria-label="Uploaded Flute files"></div>
+          <div id="source-file-list" class="source-file-list" role="list" aria-label="Uploaded source files"></div>
           <div class="toolbar-actions">
             <button class="button button-ghost" id="add-files" type="button">Add files</button>
             <button class="button button-ghost" id="clear-file" type="button">Clear</button>

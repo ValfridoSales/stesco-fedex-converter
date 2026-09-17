@@ -7,6 +7,7 @@
   let shipments = [];
   let sourceFiles = [];
   let importing = false;
+  let batchBlockedReason = "";
   let batchRevision = 0;
   let editingIndex = -1;
   let toastTimer = null;
@@ -91,8 +92,11 @@
       results.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
       if (revision !== batchRevision) return;
-      $("#upload-error").textContent = error.message + " None of the files in this selection were added. Your existing batch is unchanged.";
+      batchBlockedReason = shipments.length ? error.message : "";
+      $("#upload-error").textContent = error.message + " None of the files in this selection were added." +
+        (shipments.length ? " Download is disabled for the current batch. Clear it, then upload all intended files again." : " Choose a supported, unchanged export and try again.");
       $("#upload-error").hidden = false;
+      if (shipments.length) render();
     } finally { importing = false; fileInput.value = ""; }
   }
 
@@ -100,6 +104,7 @@
     const sources = [{ text, name: fileName || "Flute export.csv", size: fileSize }];
     const converted = C.convertFiles(sources, settings);
     batchRevision++;
+    batchBlockedReason = "";
     sourceFiles = sources;
     shipments = converted;
     refreshBatch();
@@ -110,9 +115,10 @@
     results.hidden = !shipments.length;
     $("#source-file-list").innerHTML = sourceFiles.map((file, index) => {
       const count = shipments.filter(row => row.sourceFileIndex === index).length;
+      const layout = shipments.find(row => row.sourceFileIndex === index)?.sourceLayout === "paperBags" ? "Paper Bags" : "Flute";
       return `<div class="file-summary" role="listitem">
         <div class="file-icon file-icon-${escapeHtml((file.type || "CSV").toLowerCase())}" aria-hidden="true">${escapeHtml(file.type || "CSV")}</div>
-        <div><strong>${escapeHtml(file.name)}</strong><span>${count} shipment ${count === 1 ? "line" : "lines"}</span></div>
+        <div><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(layout)} · ${count} shipment ${count === 1 ? "line" : "lines"}</span></div>
       </div>`;
     }).join("");
     render();
@@ -125,7 +131,7 @@
 
   function render() {
     shipments.forEach(shipment => {
-      shipment.errors = C.validateFedExRow(shipment.fedex);
+      shipment.errors = C.validateFedExRow(shipment.fedex, shipment.validationProfile);
       shipment.status = shipment.errors.length ? "review" : "ready";
     });
     const ready = shipments.filter(item => item.status === "ready").length;
@@ -134,7 +140,8 @@
     $("#metric-ready").textContent = ready;
     $("#metric-review").textContent = review;
     const duplicates = C.duplicateIndexes(shipments);
-    $("#download").disabled = shipments.length === 0 || review > 0 || duplicates.length > 0;
+    $("#download").disabled = shipments.length === 0 || review > 0 || duplicates.length > 0 || Boolean(batchBlockedReason);
+    $("#add-files").disabled = Boolean(batchBlockedReason);
     const notice = $("#duplicate-notice");
     notice.hidden = !duplicates.length;
     notice.innerHTML = duplicates.length ? '<strong>Repeated Flute order and line. Resolve each extra occurrence before downloading.</strong>' + duplicates.map(index => {
@@ -150,6 +157,11 @@
       $("#validation-title").textContent = "Resolve repeated order lines before exporting";
       $("#validation-copy").textContent = "Use the duplicate review above to remove extra rows or confirm they are intentional. Complete any missing fields too.";
     }
+    if (batchBlockedReason) {
+      banner.dataset.state = "review";
+      $("#validation-title").textContent = "Download blocked by an unsupported layout";
+      $("#validation-copy").textContent = "Clear this batch, then upload all intended files again using a supported Flute or Paper Bags layout.";
+    }
     $("#shipment-rows").innerHTML = shipments.map((shipment, index) => rowMarkup(shipment, index)).join("");
   }
 
@@ -160,7 +172,7 @@
     const sourceDetail = [shipment.sourceFile, `${source?.type || "CSV"} row ${shipment.sourceRow}`, shipment.sourceOrder && `Flute ${shipment.sourceOrder}`, shipment.sourceLine && `line ${shipment.sourceLine}`].filter(Boolean).join(" · ");
     return `<tr>
       <td><span class="status-pill ${shipment.status === "review" ? "review" : ""}">${statusText}</span></td>
-      <td><div class="stacked-cell"><span class="cell-primary">${escapeHtml(r.poNumber || "Missing")}</span><span class="cell-secondary">${escapeHtml(sourceDetail)}</span></div></td>
+      <td><div class="stacked-cell"><span class="cell-primary">${escapeHtml(r.poNumber || (shipment.validationProfile === "paperBags" ? "Blank by rule" : "Missing"))}</span><span class="cell-secondary">${escapeHtml(sourceDetail)}</span></div></td>
       <td><div class="stacked-cell"><span class="cell-primary">${escapeHtml(r.reference || "Unmapped")}</span><span class="cell-secondary">${escapeHtml(shipment.productKey || shipment.docketId || "No product code")}</span></div></td>
       <td>${escapeHtml(r.recipientContactName || "Missing")}</td>
       <td>${escapeHtml(r.recipientCompany || "Missing")}</td>
@@ -203,7 +215,10 @@
     const shipment = shipments[index];
     $("#row-dialog-eyebrow").textContent = `${shipment.sourceFile} · Source row ${shipment.sourceRow}${shipment.docketId ? ` · docket ${shipment.docketId}` : ""}`;
     $("#row-dialog-title").textContent = shipment.fedex.reference || "Review shipment";
-    populateFields($("#row-recipient-fields"), recipientFieldConfig, shipment.fedex, "row");
+    const fields = shipment.validationProfile === "paperBags"
+      ? recipientFieldConfig.filter(item => item[0] !== "poNumber")
+      : recipientFieldConfig;
+    populateFields($("#row-recipient-fields"), fields, shipment.fedex, "row");
     populateFields($("#row-package-fields"), packageFieldConfig, shipment.fedex, "row");
     renderDialogErrors(shipment.errors);
     highlightInvalidFields(shipment.errors);
@@ -254,7 +269,7 @@
     Object.assign(shipment.fedex, Object.fromEntries(new FormData(event.currentTarget).entries()));
     shipment.fedex.senderPostcode = C.normalizePostcode(shipment.fedex.senderPostcode);
     shipment.fedex.recipientPostcode = C.normalizePostcode(shipment.fedex.recipientPostcode);
-    shipment.errors = C.validateFedExRow(shipment.fedex);
+    shipment.errors = C.validateFedExRow(shipment.fedex, shipment.validationProfile);
     shipment.status = shipment.errors.length ? "review" : "ready";
     if (shipment.errors.length) {
       renderDialogErrors(shipment.errors);
@@ -274,7 +289,7 @@
   }
 
   function exportFile() {
-    if (!shipments.length || C.duplicateIndexes(shipments).length || shipments.some(item => C.validateFedExRow(item.fedex).length)) return null;
+    if (batchBlockedReason || !shipments.length || C.duplicateIndexes(shipments).length || shipments.some(item => C.validateFedExRow(item.fedex, item.validationProfile).length)) return null;
     return new File([C.exportFedExCsv(shipments)], exportFilename(), { type: "text/csv" });
   }
 
@@ -295,6 +310,7 @@
   function clearFile() {
     shipments = [];
     sourceFiles = [];
+    batchBlockedReason = "";
     batchRevision++;
     $("#upload-error").hidden = true;
     $("#source-file-list").replaceChildren();
@@ -356,6 +372,9 @@
         if (!input.changes || typeof input.changes !== "object" || Array.isArray(input.changes)) throw new Error("changes must be an object.");
         const invalid = Object.keys(input.changes).filter(field => !editableFields.includes(field));
         if (invalid.length) throw new Error(`Fields cannot be edited: ${invalid.join(", ")}.`);
+        if (shipments[input.rowNumber - 1].validationProfile === "paperBags" && Object.hasOwn(input.changes, "poNumber")) {
+          throw new Error("Paper Bags PO numbers must remain blank.");
+        }
         Object.assign(shipments[input.rowNumber - 1].fedex, input.changes);
         render();
         const shipment = shipments[input.rowNumber - 1];
@@ -369,7 +388,8 @@
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute() {
-        if (!shipments.length) throw new Error("No Flute CSV is staged.");
+        if (!shipments.length) throw new Error("No source file is staged.");
+        if (batchBlockedReason) throw new Error("Download is blocked because an uploaded file did not match a supported layout. Clear the batch and upload again.");
         if (C.duplicateIndexes(shipments).length) throw new Error("Resolve duplicate order lines before exporting.");
         const needsReview = shipments.filter(item => item.status !== "ready").length;
         if (needsReview) throw new Error(`${needsReview} shipment rows still need review.`);
@@ -405,7 +425,7 @@
       ...shipments[editingIndex].fedex,
       ...Object.fromEntries(new FormData(event.currentTarget).entries())
     };
-    const errors = C.validateFedExRow(draft);
+    const errors = C.validateFedExRow(draft, shipments[editingIndex].validationProfile);
     renderDialogErrors(errors);
     highlightInvalidFields(errors);
   });

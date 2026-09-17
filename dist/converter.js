@@ -22,10 +22,31 @@
     "euDeMinimisNonStandardManufacturerProductId", "euDeMinimisStandardManufacturerProductId"
   ];
 
-  const REQUIRED_FLUTE_HEADERS = [
-    "billing_po", "ship_nme", "ship_nme2", "ship_add1", "ship_city", "ship_prov", "ship_posta", "ship_count",
-    "order_qty", "docket_id", "docket_txt"
+  const FLUTE_HEADERS = [
+    "order_id", "customer_i", "status_id", "print_stat", "order_dte", "order_user", "modified_d", "modified_u",
+    "ship_nbr", "ship_nme", "ship_nme2", "ship_add1", "ship_add2", "ship_city", "ship_prov", "ship_posta",
+    "ship_count", "ship_via", "ship_fob", "status_flg", "sales_code", "discount_p", "ship_same", "salesrep_i",
+    "charge_tax", "charge_ta2", "charge_ta3", "charge_ta4", "discount", "revision_n", "revision_d", "customer_c",
+    "currency_i", "shipping_h", "created_on", "appt_made", "appt_made_", "appt_made2", "appt_dte", "appt_time",
+    "order_rece", "orderdet_i", "order_id1", "order_line", "docket_id", "short_name", "scheduled_", "due_dte_ds",
+    "requested_", "requested2", "billing_po", "shipping_p", "order_type", "jit_build2", "jit_build3", "jit_build4",
+    "jit_build5", "jit_status", "order_qty", "pricing_qt", "order_min", "order_max", "cost_price", "selling_pr",
+    "custom_id", "gl_code_id", "schedule_s", "material_s", "corrugator", "corrugato2", "corrugato3", "hot",
+    "first_avai", "delivery_s", "order_cate", "jit_build6", "requested3", "material_e", "material_a", "material_o",
+    "labour_eac", "overhead_e", "delivery_e", "other_each", "skids_each", "commission", "run_qty", "customer_n",
+    "salesrep_n", "gl_code_ds", "sqf", "ship_qty", "unitizing_", "old_code", "skid_type_", "ship_uniti",
+    "print_type", "style_dsc", "style_dsc2", "material_d", "short_nam2", "material_2", "closure_ds", "closure_d2",
+    "printing_d", "printing_2", "custom_dsc", "custom_pic", "custom_div", "group_by", "category_d", "unitizing2",
+    "division_d", "transfer", "prev_shipp", "docket_txt"
   ];
+
+  const PAPER_BAGS_HEADERS = [
+    "div", "store #", "Banner", "Store Name", "Address", "Store City", "Store State", "Postal code",
+    "Delivery Time (Days)", "QTY"
+  ];
+
+  // Retained as a public alias for integrations that used the earlier name.
+  const REQUIRED_FLUTE_HEADERS = FLUTE_HEADERS;
 
   const REQUIRED_FEDEX_FIELDS = [
     "poNumber", "reference", "senderContactName", "senderCompany", "senderContactNumber", "senderEmail", "senderLine1",
@@ -102,14 +123,40 @@
     return rows;
   }
 
+  function sameHeaders(actual, expected) {
+    return actual.length === expected.length && actual.every((header, index) => header === expected[index]);
+  }
+
+  function layoutError(headers) {
+    const schemas = [
+      { label: "Flute", headers: FLUTE_HEADERS },
+      { label: "Paper Bags", headers: PAPER_BAGS_HEADERS }
+    ];
+    const closest = schemas.map(schema => ({
+      ...schema,
+      score: schema.headers.filter(header => headers.includes(header)).length
+    })).sort((a, b) => b.score - a.score)[0];
+    const missing = closest.headers.filter(header => !headers.includes(header));
+    const unexpected = headers.filter(header => !closest.headers.includes(header));
+    const details = [];
+    if (missing.length) details.push(`Missing: ${missing.slice(0, 6).join(", ")}${missing.length > 6 ? ", …" : ""}.`);
+    if (unexpected.length) details.push(`Unexpected: ${unexpected.slice(0, 6).join(", ")}${unexpected.length > 6 ? ", …" : ""}.`);
+    if (!missing.length && !unexpected.length) details.push("The column order has changed.");
+    return new Error(`The file layout does not match a supported Flute or Paper Bags layout. Closest match: ${closest.label}. ${details.join(" ")} Download is blocked to prevent an incorrect conversion.`);
+  }
+
   function rowsToObjects(rows) {
-    const headers = rows[0].map(clean);
+    if (!Array.isArray(rows) || !rows.length) throw new Error("The source file is empty.");
+    const headerRowIndex = rows.findIndex(row => Array.isArray(row) && row.some(value => clean(value) !== ""));
+    if (headerRowIndex < 0) throw new Error("The source file is empty.");
+    const headers = rows[headerRowIndex].map(clean);
     const duplicates = headers.filter((header, index) => header && headers.indexOf(header) !== index);
-    if (duplicates.length) throw new Error(`The Flute file contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
-    const missing = REQUIRED_FLUTE_HEADERS.filter(header => !headers.includes(header));
-    if (missing.length) throw new Error(`This does not look like the expected Flute export. Missing columns: ${missing.join(", ")}.`);
-    return rows.slice(1).filter(row => row.some(value => clean(value) !== "")).map((row, rowIndex) => {
-      const object = { __sourceRow: rowIndex + 2 };
+    if (duplicates.length) throw new Error(`The source file contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
+    const sourceLayout = sameHeaders(headers, FLUTE_HEADERS) ? "flute"
+      : sameHeaders(headers, PAPER_BAGS_HEADERS) ? "paperBags" : "";
+    if (!sourceLayout) throw layoutError(headers);
+    return rows.slice(headerRowIndex + 1).map((row, rowIndex) => ({ row, rowIndex })).filter(item => item.row.some(value => clean(value) !== "")).map(({ row, rowIndex }) => {
+      const object = { __sourceRow: headerRowIndex + rowIndex + 2, __sourceLayout: sourceLayout };
       headers.forEach((header, index) => { if (header) object[header] = row[index] == null ? "" : row[index]; });
       return object;
     });
@@ -145,7 +192,7 @@
   function normalizeProvince(value, country) {
     const code = clean(value).toUpperCase();
     if (normalizeCountry(country) !== "CA") return code;
-    return ({ SA: "SK" })[code] || code;
+    return ({ SA: "SK", SASK: "SK" })[code] || code;
   }
 
   // Keep UI and saved settings compatible; FedEx calls province fields "State".
@@ -198,17 +245,72 @@
       sourceLine: clean(source.order_line),
       docketId: clean(source.docket_id),
       productKey: product ? product.key : "",
+      sourceLayout: "flute",
+      validationProfile: "flute",
       fedex: row,
       warnings: product ? [] : [`No product mapping was found for docket ${clean(source.docket_id) || "(blank)"}.`]
     };
-    result.errors = validateFedExRow(row);
+    result.errors = validateFedExRow(row, result.validationProfile);
     result.status = result.errors.length ? "review" : "ready";
     return result;
   }
 
-  function validateFedExRow(row) {
+  function convertPaperBagsRecord(source, settings) {
+    const row = emptyFedExRow();
+    Object.assign(row, {
+      poNumber: "",
+      reference: "Paper Bags",
+      senderContactName: clean(settings.senderContactName),
+      senderCompany: clean(settings.senderCompany),
+      senderContactNumber: clean(settings.senderContactNumber),
+      senderEmail: clean(settings.senderEmail),
+      senderLine1: clean(settings.senderLine1),
+      senderLine2: clean(settings.senderLine2),
+      senderPostcode: normalizePostcode(settings.senderPostcode),
+      senderProvince: clean(settings.senderProvince).toUpperCase(),
+      senderCity: clean(settings.senderCity).toUpperCase(),
+      senderCountry: normalizeCountry(settings.senderCountry),
+      recipientContactName: "Store Manager",
+      recipientCompany: [clean(source["store #"]), clean(source.Banner)].filter(Boolean).join(" "),
+      recipientContactNumber: clean(settings.recipientContactNumber),
+      recipientEmail: clean(settings.recipientEmail),
+      recipientLine1: clean(source.Address),
+      recipientLine2: clean(source["Store Name"]),
+      recipientLine3: "",
+      recipientPostcode: normalizePostcode(source["Postal code"]),
+      recipientProvince: normalizeProvince(source["Store State"], "Canada"),
+      recipientCity: clean(source["Store City"]).toUpperCase(),
+      recipientCountry: "CA",
+      packageType: clean(settings.packageType),
+      numberOfPackages: clean(source.QTY),
+      packageWeight: 49,
+      weightUnits: clean(settings.weightUnits),
+      length: 24,
+      width: 20,
+      height: 11,
+      currencyType: clean(settings.currencyType),
+      serviceType: clean(settings.serviceType)
+    });
+    const result = {
+      sourceRow: source.__sourceRow,
+      sourceOrder: "",
+      sourceLine: "",
+      docketId: "",
+      productKey: "PAPER-BAGS",
+      sourceLayout: "paperBags",
+      validationProfile: "paperBags",
+      fedex: row,
+      warnings: []
+    };
+    result.errors = validateFedExRow(row, result.validationProfile);
+    result.status = result.errors.length ? "review" : "ready";
+    return result;
+  }
+
+  function validateFedExRow(row, profile = "flute") {
     const errors = [];
     REQUIRED_FEDEX_FIELDS.forEach(field => {
+      if (field === "poNumber" && profile === "paperBags") return;
       if (!clean(row[field])) errors.push(`${field} is required.`);
     });
     const packageCount = Number(row.numberOfPackages);
@@ -231,9 +333,11 @@
 
   function convertRows(rows, settings) {
     const sourceRows = rowsToObjects(rows);
-    if (!sourceRows.length) throw new Error("The Flute export contains headers but no shipment lines.");
+    if (!sourceRows.length) throw new Error("The supported source layout contains headers but no shipment lines.");
     const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
-    return sourceRows.map(source => convertRecord(source, effectiveSettings));
+    return sourceRows.map(source => source.__sourceLayout === "paperBags"
+      ? convertPaperBagsRecord(source, effectiveSettings)
+      : convertRecord(source, effectiveSettings));
   }
 
   function csvEscape(value) {
@@ -270,6 +374,7 @@
       lines.push(FEDEX_HEADERS.map(header => {
         const row = shipment.fedex;
         let value = row[EXPORT_FIELD_KEYS[header] || header];
+        if (header === "poNumber" && shipment.validationProfile === "paperBags") value = "";
         if (header === "senderState" || header === "recipientState") {
           const country = header === "senderState" ? row.senderCountry : row.recipientCountry;
           if (normalizeCountry(country) === "CA") {
@@ -287,6 +392,8 @@
     convertFiles,
     duplicateIndexes,
     FEDEX_HEADERS,
+    FLUTE_HEADERS,
+    PAPER_BAGS_HEADERS,
     REQUIRED_FLUTE_HEADERS,
     REQUIRED_FEDEX_FIELDS,
     PRODUCT_MAP,
@@ -297,6 +404,7 @@
     convertCsv,
     convertRows,
     convertRecord,
+    convertPaperBagsRecord,
     validateFedExRow,
     exportFedExCsv,
     normalizeCountry,

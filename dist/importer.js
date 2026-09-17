@@ -28,19 +28,24 @@
     const workbook = XLSX.read(input, { type: isNodeBuffer ? "buffer" : "array", cellDates: false });
     const firstSheetName = workbook.SheetNames?.[0];
     if (!firstSheetName) throw new Error("The Excel workbook does not contain a worksheet.");
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
+    const sheet = workbook.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
       defval: "",
       raw: false,
-      blankrows: false
+      blankrows: true
     });
     if (!rows.length) throw new Error("The Excel worksheet is empty.");
-    return rows.map(row => row.map(value => value == null ? "" : String(value)));
+    const firstUsedRow = XLSX.utils.decode_range?.(sheet["!ref"] || "A1").s.r || 0;
+    return [
+      ...Array.from({ length: firstUsedRow }, () => []),
+      ...rows.map(row => row.map(value => value == null ? "" : String(value)))
+    ];
   }
 
   async function readFluteFile(file) {
     const type = fileTypeLabel(file?.name);
-    if (!type) throw new Error(`${file?.name || "Selected file"}: Choose a Flute XLS, XLSX, or CSV file.`);
+    if (!type) throw new Error(`${file?.name || "Selected file"}: Choose a supported XLS, XLSX, or CSV file.`);
     try {
       if (type === "CSV") return { name: file.name, size: file.size, type, text: await file.text() };
       return { name: file.name, size: file.size, type, rows: workbookToRows(await file.arrayBuffer()) };
