@@ -40,6 +40,31 @@
     "division_d", "transfer", "prev_shipp", "docket_txt"
   ];
 
+  const FLUTE_CONFIRMATION_HEADERS = [
+    "order_id", "customer_i", "status_id", "print_stat", "order_dte", "order_user", "modified_d", "modified_u",
+    "ship_nbr", "ship_nme", "ship_nme2", "ship_add1", "ship_add2", "ship_city", "ship_prov", "ship_posta",
+    "ship_count", "ship_via", "ship_fob", "status_flg", "sales_code", "discount_p", "ship_same", "salesrep_i",
+    "charge_tax", "charge_ta2", "charge_ta3", "charge_ta4", "discount", "revision_n", "revision_d", "customer_c",
+    "currency_i", "shipping_h", "created_on", "appt_made", "appt_made_", "appt_made2", "appt_dte", "appt_time",
+    "order_rece", "orderdet_i", "order_id1", "order_line", "docket_id", "short_name", "scheduled_", "due_dte_ds",
+    "requested_", "requested2", "billing_po", "shipping_p", "order_type", "jit_build_", "jit_build2", "jit_build3",
+    "jit_build4", "jit_status", "order_qty", "pricing_qt", "order_min", "order_max", "cost_price", "selling_pr",
+    "custom_id", "gl_code_id", "schedule_s", "material_s", "corrugator", "corrugato2", "corrugato3", "hot",
+    "first_avai", "delivery_s", "order_cate", "jit_build5", "requested3", "material_e", "material_a", "material_o",
+    "labour_eac", "overhead_e", "delivery_e", "other_each", "skids_each", "commission", "run_qty", "customer_n",
+    "customer_2", "customer_a", "customer_3", "customer_4", "customer_p", "customer_5", "customer_6", "customer_7",
+    "customer_f", "tax1_numbe", "tax2_numbe", "terms_dsc", "style_dsc", "style_dsc2", "material_d", "confirmati",
+    "min_per", "max_per", "line_value", "custom_div", "total_valu", "material_2", "closure_ds", "closure_d2",
+    "printing_d", "printing_2", "custom_dsc", "custom_pic", "custom_rou", "contact_id", "customer_8", "customer_9",
+    "contact_sa", "contact_fi", "contact_la", "contact_ti", "contact_ty", "contact_t2", "contact_t3", "contact_t4",
+    "contact_nm", "contact_n2", "contact_ad", "contact_a2", "contact_ci", "contact_pr", "contact_po", "contact_co",
+    "contact_ph", "contact_p2", "contact_p3", "contact_fa", "contact_f2", "contact_em", "contact_us", "allow_onli",
+    "web_user_i", "web_passwo", "allow_quic", "allow_dock", "contact_ce", "contact_c2", "contact_ho", "contact_h2",
+    "default_or", "default_qu", "contact_t5", "allow_orde", "reseller", "advanced_r", "scheduler", "contact_t6",
+    "allow_ar", "super_user", "default_wa", "survey_sta", "currency_d", "sign_off", "already_se", "p_jpg",
+    "docket_txt"
+  ];
+
   const PAPER_BAGS_HEADERS = [
     "div", "store #", "Banner", "Store Name", "Address", "Store City", "Store State", "Postal code",
     "Delivery Time (Days)", "QTY"
@@ -129,7 +154,8 @@
 
   function layoutError(headers) {
     const schemas = [
-      { label: "Flute", headers: FLUTE_HEADERS },
+      { label: "Flute order_jit_ships", headers: FLUTE_HEADERS },
+      { label: "Flute order_confirmation", headers: FLUTE_CONFIRMATION_HEADERS },
       { label: "Paper Bags", headers: PAPER_BAGS_HEADERS }
     ];
     const closest = schemas.map(schema => ({
@@ -153,6 +179,7 @@
     const duplicates = headers.filter((header, index) => header && headers.indexOf(header) !== index);
     if (duplicates.length) throw new Error(`The source file contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
     const sourceLayout = sameHeaders(headers, FLUTE_HEADERS) ? "flute"
+      : sameHeaders(headers, FLUTE_CONFIRMATION_HEADERS) ? "fluteConfirmation"
       : sameHeaders(headers, PAPER_BAGS_HEADERS) ? "paperBags" : "";
     if (!sourceLayout) throw layoutError(headers);
     return rows.slice(headerRowIndex + 1).map((row, rowIndex) => ({ row, rowIndex })).filter(item => item.row.some(value => clean(value) !== "")).map(({ row, rowIndex }) => {
@@ -202,7 +229,7 @@
     return Object.fromEntries(FEDEX_HEADERS.map(header => [EXPORT_FIELD_KEYS[header] || header, ""]));
   }
 
-  function convertRecord(source, settings) {
+  function convertRecord(source, settings, sourceLayout = "flute") {
     const product = findProduct(source);
     const row = emptyFedExRow();
     Object.assign(row, {
@@ -245,7 +272,7 @@
       sourceLine: clean(source.order_line),
       docketId: clean(source.docket_id),
       productKey: product ? product.key : "",
-      sourceLayout: "flute",
+      sourceLayout,
       validationProfile: "flute",
       fedex: row,
       warnings: product ? [] : [`No product mapping was found for docket ${clean(source.docket_id) || "(blank)"}.`]
@@ -337,7 +364,7 @@
     const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
     return sourceRows.map(source => source.__sourceLayout === "paperBags"
       ? convertPaperBagsRecord(source, effectiveSettings)
-      : convertRecord(source, effectiveSettings));
+      : convertRecord(source, effectiveSettings, source.__sourceLayout));
   }
 
   function csvEscape(value) {
@@ -393,6 +420,7 @@
     duplicateIndexes,
     FEDEX_HEADERS,
     FLUTE_HEADERS,
+    FLUTE_CONFIRMATION_HEADERS,
     PAPER_BAGS_HEADERS,
     REQUIRED_FLUTE_HEADERS,
     REQUIRED_FEDEX_FIELDS,

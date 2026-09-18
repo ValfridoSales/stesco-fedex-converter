@@ -115,7 +115,9 @@
     results.hidden = !shipments.length;
     $("#source-file-list").innerHTML = sourceFiles.map((file, index) => {
       const count = shipments.filter(row => row.sourceFileIndex === index).length;
-      const layout = shipments.find(row => row.sourceFileIndex === index)?.sourceLayout === "paperBags" ? "Paper Bags" : "Flute";
+      const sourceLayout = shipments.find(row => row.sourceFileIndex === index)?.sourceLayout;
+      const layout = sourceLayout === "paperBags" ? "Paper Bags"
+        : sourceLayout === "fluteConfirmation" ? "Flute order confirmation" : "Flute JIT ships";
       return `<div class="file-summary" role="listitem">
         <div class="file-icon file-icon-${escapeHtml((file.type || "CSV").toLowerCase())}" aria-hidden="true">${escapeHtml(file.type || "CSV")}</div>
         <div><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(layout)} · ${count} shipment ${count === 1 ? "line" : "lines"}</span></div>

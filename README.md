@@ -2,6 +2,8 @@
 
 A browser-only converter for turning supported Flute and Paper Bags `.xls`, `.xlsx`, or `.csv` exports into the 70-column FedEx batch CSV format used by the customer service team.
 
+Supported source layouts are the 116-column Flute `order_jit_ships` export, the 169-column Flute `order_confirmation` export, and the 10-column Paper Bags workbook. Each layout must retain its exact approved column names and order.
+
 ## Run locally
 
 Open `dist/index.html` in a current browser. No installation or server is required.

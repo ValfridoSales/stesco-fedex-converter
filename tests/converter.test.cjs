@@ -26,6 +26,8 @@ const templateHeaders = "poNumber,reference,senderContactName,senderCompany,send
 const shipments = C.convertCsv(input, C.DEFAULT_SETTINGS);
 
 assert.equal(C.FEDEX_HEADERS.length, 70, "FedEx output must contain 70 columns");
+assert.equal(C.FLUTE_HEADERS.length, 116, "The approved order_jit_ships layout must contain 116 columns");
+assert.equal(C.FLUTE_CONFIRMATION_HEADERS.length, 169, "The approved order_confirmation layout must contain 169 columns");
 const correctedHeaders = templateHeaders.map(header => ({ senderProvince: "senderState", recipientProvince: "recipientState" }[header] || header));
 assert.deepEqual(C.FEDEX_HEADERS, correctedHeaders, "FedEx headers must use the documented State names");
 assert.equal(shipments.length, 6, "Every Flute line must produce one FedEx row");
@@ -138,6 +140,36 @@ const mixed = C.convertFiles([
 assert.equal(mixed.length, 12, "Mixed CSV and XLS files must create one combined batch");
 assert.equal(C.parseCsv(C.exportFedExCsv(mixed)).length, 13, "Mixed-file output must contain one header");
 
+const confirmationValues = {
+  billing_po: "CONF-PO-2001", ship_nme: "99020 FOOT LOCKER CANADA", ship_nme2: "Attn: Store Manager",
+  ship_add1: "201 1ST AVE SOUTH UNIT 18", ship_add2: "MIDTOWN PLAZA", ship_city: "SASKATOON",
+  ship_prov: "SA", ship_posta: "S7K 1J9", ship_count: "Canada", order_qty: "3", docket_id: "120073",
+  docket_txt: "[FOOLOC-061] Medium Kit", order_id: "CONFIRM-ORDER-1", order_line: "1", currency_d: "CDN"
+};
+const confirmationRows = [
+  C.FLUTE_CONFIRMATION_HEADERS,
+  C.FLUTE_CONFIRMATION_HEADERS.map(header => confirmationValues[header] ?? "")
+];
+const confirmation = C.convertRows(confirmationRows, C.DEFAULT_SETTINGS);
+assert.equal(confirmation.length, 1, "Every order_confirmation row must produce one FedEx row");
+assert.equal(confirmation[0].sourceLayout, "fluteConfirmation");
+assert.equal(confirmation[0].validationProfile, "flute");
+assert.equal(confirmation[0].status, "ready");
+assert.equal(confirmation[0].fedex.poNumber, "CONF-PO-2001");
+assert.equal(confirmation[0].fedex.reference, "Medium");
+assert.equal(confirmation[0].fedex.recipientCompany, "99020 FOOT LOCKER CANADA");
+assert.equal(confirmation[0].fedex.recipientLine2, "MIDTOWN PLAZA");
+assert.equal(confirmation[0].fedex.recipientProvince, "SK");
+assert.equal(confirmation[0].fedex.recipientPostcode, "S7K1J9");
+assert.equal(confirmation[0].fedex.numberOfPackages, "3");
+assert.equal(confirmation[0].fedex.currencyType, "CAD");
+assert.deepEqual([confirmation[0].fedex.packageWeight, confirmation[0].fedex.length, confirmation[0].fedex.width, confirmation[0].fedex.height], [33, 26, 12, 16]);
+assert.throws(
+  () => C.convertRows([C.FLUTE_CONFIRMATION_HEADERS.map(header => header === "billing_po" ? "billing_po_changed" : header), confirmationRows[1]], C.DEFAULT_SETTINGS),
+  /layout does not match/,
+  "A renamed order_confirmation column must block conversion"
+);
+
 const paperRows = [
   [],
   [],
@@ -173,9 +205,10 @@ assert.throws(
 );
 const mixedLayouts = C.convertFiles([
   { name: "flute.csv", type: "CSV", text: input },
+  { name: "order_confirmation.xls", type: "XLS", rows: confirmationRows },
   { name: "paper-bags.xlsx", type: "XLSX", rows: paperRows }
 ]);
-assert.equal(mixedLayouts.length, 7, "Flute and Paper Bags files must combine into one batch");
-assert.equal(C.parseCsv(C.exportFedExCsv(mixedLayouts)).length, 8, "Mixed-layout output must contain exactly one header");
+assert.equal(mixedLayouts.length, 8, "Both Flute layouts and Paper Bags files must combine into one batch");
+assert.equal(C.parseCsv(C.exportFedExCsv(mixedLayouts)).length, 9, "Mixed-layout output must contain exactly one header");
 
-console.log("Passed: strict Flute/Paper Bags schemas, CSV/XLS/XLSX conversion, province aliases, mixed batches, source tracking and duplicate checks.");
+console.log("Passed: strict order_jit_ships, order_confirmation, and Paper Bags schemas; CSV/XLS/XLSX conversion; province aliases; mixed batches; source tracking; and duplicate checks.");
