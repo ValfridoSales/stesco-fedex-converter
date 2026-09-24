@@ -1,6 +1,6 @@
 # Stesco FedEx Batch Converter
 
-A browser-only converter for turning supported Flute and Paper Bags `.xls`, `.xlsx`, or `.csv` exports into the 70-column FedEx batch CSV format used by the customer service team.
+A browser-only converter for turning supported Flute and Paper Bags `.xls`, `.xlsx`, or `.csv` exports into the FedEx batch CSV format used by the customer service team.
 
 Supported source layouts are the 116-column Flute `order_jit_ships` export, the 169-column Flute `order_confirmation` export, and the 10-column Paper Bags workbook. Each layout must retain its exact approved column names and order.
 
@@ -40,11 +40,12 @@ The bundled SheetJS Community Edition reader handles legacy Excel 97–2003 `.xl
 - `recipientContactName` comes from `ship_nme2`.
 - `recipientCompany` comes from `ship_nme` without modification.
 - Product reference, weight, and dimensions come from the included Foot Locker product map.
+- Transportation charges are always billed to Foot Locker as `THIRD_PARTY` using FedEx account `263261577` through the `paymentType` and `payerAccountNumber` columns.
 - Paper Bags rows use `store # + Banner` as the recipient company, `Address` as address line 1, and `Store Name` as address line 2.
 - Paper Bags rows use `Store Manager` as the contact, `Paper Bags` as the reference, a blank PO, and Canada as the country.
 - Paper Bags `QTY` supplies the package count. Every package is 49 lb and 24 × 20 × 11 in.
 - Paper Bags province code `SASK` is normalized to `SK`; `div` and `Delivery Time (Days)` are intentionally ignored.
-- The downloaded file always uses the FedEx template's 70 headers in their required order.
+- The downloaded file uses the configured FedEx headers in a stable order, including the two transportation-billing columns.
 
 ## Test
 

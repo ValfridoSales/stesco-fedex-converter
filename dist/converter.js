@@ -14,6 +14,7 @@
     "height", "currencyType", "oneRatePricing", "commodityType", "itemDescription", "harmonizedCode",
     "manufacturingCountry", "commodityQuantity", "commodityMeasureUnit", "commodityWeight", "customsValue",
     "documentType", "documentDescription", "purposeOfShipment", "generateInvoice", "etdEnabled", "serviceType",
+    "paymentType", "payerAccountNumber",
     "soldToPartyCountry", "soldToPartyContactName", "soldToPartyCompany", "soldToPartyLine1", "soldToPartyLine2",
     "soldToPartyLine3", "soldToPartyCity", "soldToPartyState", "soldToPartyPostcode",
     "soldToPartyPhoneExtension", "soldToPartyContactNumber", "soldToPartyTin", "soldToPartyEmail",
@@ -78,8 +79,13 @@
     "senderPostcode", "senderProvince", "senderCity", "senderCountry", "recipientContactName", "recipientCompany",
     "recipientContactNumber", "recipientEmail", "recipientLine1", "recipientPostcode", "recipientProvince",
     "recipientCity", "recipientCountry", "packageType", "numberOfPackages", "packageWeight", "weightUnits",
-    "currencyType", "serviceType"
+    "currencyType", "serviceType", "paymentType", "payerAccountNumber"
   ];
+
+  const FOOT_LOCKER_BILLING = Object.freeze({
+    paymentType: "THIRD_PARTY",
+    payerAccountNumber: "263261577"
+  });
 
   const PRODUCT_MAP = {
     "FOOLOC-059": { docketIds: ["120066"], reference: "Small", length: 18, width: 13, height: 13, weight: 19 },
@@ -264,7 +270,8 @@
       width: product ? product.width : "",
       height: product ? product.height : "",
       currencyType: normalizeCurrency(source.currency_d, clean(settings.currencyType)),
-      serviceType: clean(settings.serviceType)
+      serviceType: clean(settings.serviceType),
+      ...FOOT_LOCKER_BILLING
     });
     const result = {
       sourceRow: source.__sourceRow,
@@ -316,7 +323,8 @@
       width: 20,
       height: 11,
       currencyType: clean(settings.currencyType),
-      serviceType: clean(settings.serviceType)
+      serviceType: clean(settings.serviceType),
+      ...FOOT_LOCKER_BILLING
     });
     const result = {
       sourceRow: source.__sourceRow,
@@ -425,6 +433,7 @@
     REQUIRED_FLUTE_HEADERS,
     REQUIRED_FEDEX_FIELDS,
     PRODUCT_MAP,
+    FOOT_LOCKER_BILLING,
     DEFAULT_SETTINGS,
     parseCsv,
     rowsToObjects,

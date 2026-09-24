@@ -22,10 +22,10 @@ const inputRows = productRows.map(([quantity, docketId, description], index) => 
   return inputHeaders.map(header => values[header] ?? "");
 });
 const input = [inputHeaders, ...inputRows].map(row => row.join(",")).join("\r\n") + "\r\n";
-const templateHeaders = "poNumber,reference,senderContactName,senderCompany,senderContactNumber,senderEmail,senderLine1,senderLine2,senderPostcode,senderProvince,senderCity,senderCountry,recipientContactName,recipientCompany,recipientContactNumber,recipientEmail,recipientLine1,recipientLine2,recipientLine3,recipientPostcode,recipientProvince,recipientCity,recipientCountry,packageType,numberOfPackages,packageWeight,weightUnits,length,width,height,currencyType,oneRatePricing,commodityType,itemDescription,harmonizedCode,manufacturingCountry,commodityQuantity,commodityMeasureUnit,commodityWeight,customsValue,documentType,documentDescription,purposeOfShipment,generateInvoice,etdEnabled,serviceType,soldToPartyCountry,soldToPartyContactName,soldToPartyCompany,soldToPartyLine1,soldToPartyLine2,soldToPartyLine3,soldToPartyCity,soldToPartyState,soldToPartyPostcode,soldToPartyPhoneExtension,soldToPartyContactNumber,soldToPartyTin,soldToPartyEmail,soldToPartyAccountNumber,cpscProductId,cpscProductIdType,cpscDisclaimCode,cpscIntendedUseCode,cpscIntendedUseDescription,cpscProductVersion,cpscCertifierId,euDeMinimisMerchantProductId,euDeMinimisNonStandardManufacturerProductId,euDeMinimisStandardManufacturerProductId".split(",");
+const templateHeaders = "poNumber,reference,senderContactName,senderCompany,senderContactNumber,senderEmail,senderLine1,senderLine2,senderPostcode,senderProvince,senderCity,senderCountry,recipientContactName,recipientCompany,recipientContactNumber,recipientEmail,recipientLine1,recipientLine2,recipientLine3,recipientPostcode,recipientProvince,recipientCity,recipientCountry,packageType,numberOfPackages,packageWeight,weightUnits,length,width,height,currencyType,oneRatePricing,commodityType,itemDescription,harmonizedCode,manufacturingCountry,commodityQuantity,commodityMeasureUnit,commodityWeight,customsValue,documentType,documentDescription,purposeOfShipment,generateInvoice,etdEnabled,serviceType,paymentType,payerAccountNumber,soldToPartyCountry,soldToPartyContactName,soldToPartyCompany,soldToPartyLine1,soldToPartyLine2,soldToPartyLine3,soldToPartyCity,soldToPartyState,soldToPartyPostcode,soldToPartyPhoneExtension,soldToPartyContactNumber,soldToPartyTin,soldToPartyEmail,soldToPartyAccountNumber,cpscProductId,cpscProductIdType,cpscDisclaimCode,cpscIntendedUseCode,cpscIntendedUseDescription,cpscProductVersion,cpscCertifierId,euDeMinimisMerchantProductId,euDeMinimisNonStandardManufacturerProductId,euDeMinimisStandardManufacturerProductId".split(",");
 const shipments = C.convertCsv(input, C.DEFAULT_SETTINGS);
 
-assert.equal(C.FEDEX_HEADERS.length, 70, "FedEx output must contain 70 columns");
+assert.equal(C.FEDEX_HEADERS.length, 72, "FedEx output must contain the 70 original columns plus two billing columns");
 assert.equal(C.FLUTE_HEADERS.length, 116, "The approved order_jit_ships layout must contain 116 columns");
 assert.equal(C.FLUTE_CONFIRMATION_HEADERS.length, 169, "The approved order_confirmation layout must contain 169 columns");
 const correctedHeaders = templateHeaders.map(header => ({ senderProvince: "senderState", recipientProvince: "recipientState" }[header] || header));
@@ -45,6 +45,9 @@ assert.deepEqual(
 assert.deepEqual(shipments.map(item => item.fedex.numberOfPackages), ["1", "2", "1", "1", "1", "1"], "order_qty must populate numberOfPackages");
 assert.ok(shipments.every(item => item.fedex.recipientPostcode === "M1M1M1"), "Canadian postal codes must be normalized");
 assert.ok(shipments.every(item => item.fedex.recipientCountry === "CA"), "Canada must normalize to CA");
+assert.ok(shipments.every(item => item.fedex.paymentType === "THIRD_PARTY"), "Transportation charges must always bill third party");
+assert.ok(shipments.every(item => item.fedex.payerAccountNumber === "263261577"), "Transportation charges must always use Foot Locker's account");
+assert.deepEqual(C.FOOT_LOCKER_BILLING, { paymentType: "THIRD_PARTY", payerAccountNumber: "263261577" });
 
 const editedBlank = { ...shipments[0].fedex, recipientLine1: "" };
 assert.ok(
@@ -79,7 +82,9 @@ assert.equal(C.normalizeProvince("SA", "US"), "SA", "Flute's Canadian alias must
 const manuallyEditedSa = { fedex: { ...shipments[0].fedex, recipientProvince: "SA" } };
 assert.equal(C.parseCsv(C.exportFedExCsv([manuallyEditedSa]))[1][outputRows[0].indexOf("recipientState")], "SK", "A manually entered Canadian SA must export as SK");
 assert.equal(outputRows.length, 7, "Export must contain one header plus six data rows");
-assert.ok(outputRows.every(row => row.length === 70), "Every output row must contain all 70 FedEx columns");
+assert.ok(outputRows.every(row => row.length === 72), "Every output row must contain all 72 FedEx columns");
+assert.equal(outputRows[1][outputRows[0].indexOf("paymentType")], "THIRD_PARTY");
+assert.equal(outputRows[1][outputRows[0].indexOf("payerAccountNumber")], "263261577");
 
 const multiline = C.parseCsv('a,b\r\n"line 1\nline 2","quoted ""value"""\r\n');
 assert.equal(multiline[1][0], "line 1\nline 2", "Parser must support multiline quoted fields");
@@ -163,6 +168,8 @@ assert.equal(confirmation[0].fedex.recipientProvince, "SK");
 assert.equal(confirmation[0].fedex.recipientPostcode, "S7K1J9");
 assert.equal(confirmation[0].fedex.numberOfPackages, "3");
 assert.equal(confirmation[0].fedex.currencyType, "CAD");
+assert.equal(confirmation[0].fedex.paymentType, "THIRD_PARTY");
+assert.equal(confirmation[0].fedex.payerAccountNumber, "263261577");
 assert.deepEqual([confirmation[0].fedex.packageWeight, confirmation[0].fedex.length, confirmation[0].fedex.width, confirmation[0].fedex.height], [33, 26, 12, 16]);
 assert.throws(
   () => C.convertRows([C.FLUTE_CONFIRMATION_HEADERS.map(header => header === "billing_po" ? "billing_po_changed" : header), confirmationRows[1]], C.DEFAULT_SETTINGS),
@@ -191,6 +198,8 @@ assert.equal(paper[0].fedex.recipientCity, "SASKATOON");
 assert.equal(paper[0].fedex.recipientProvince, "SK", "Paper Bags SASK must normalize to SK");
 assert.equal(paper[0].fedex.recipientPostcode, "S7K1J9");
 assert.equal(paper[0].fedex.recipientCountry, "CA");
+assert.equal(paper[0].fedex.paymentType, "THIRD_PARTY");
+assert.equal(paper[0].fedex.payerAccountNumber, "263261577");
 assert.equal(paper[0].fedex.numberOfPackages, "12");
 assert.deepEqual([paper[0].fedex.packageWeight, paper[0].fedex.length, paper[0].fedex.width, paper[0].fedex.height], [49, 24, 20, 11]);
 assert.deepEqual(C.validateFedExRow(paper[0].fedex, paper[0].validationProfile), [], "Blank Paper Bags PO must not require review");
