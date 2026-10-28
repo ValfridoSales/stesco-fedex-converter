@@ -115,8 +115,9 @@
     results.hidden = !shipments.length;
     $("#source-file-list").innerHTML = sourceFiles.map((file, index) => {
       const count = shipments.filter(row => row.sourceFileIndex === index).length;
-      const sourceLayout = shipments.find(row => row.sourceFileIndex === index)?.sourceLayout;
-      const layout = sourceLayout === "paperBags" ? "Paper Bags"
+      const firstRow = shipments.find(row => row.sourceFileIndex === index);
+      const sourceLayout = firstRow?.sourceLayout;
+      const layout = sourceLayout === "paperBags" ? (Object.values(C.PAPER_BAG_TYPES).find(type => type.key === firstRow.productKey)?.reference || "Paper Bags")
         : sourceLayout === "fluteConfirmation" ? "Flute order confirmation" : "Flute JIT ships";
       return `<div class="file-summary" role="listitem">
         <div class="file-icon file-icon-${escapeHtml((file.type || "CSV").toLowerCase())}" aria-hidden="true">${escapeHtml(file.type || "CSV")}</div>

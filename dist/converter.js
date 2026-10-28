@@ -182,6 +182,8 @@
     const headerRowIndex = rows.findIndex(row => Array.isArray(row) && row.some(value => clean(value) !== ""));
     if (headerRowIndex < 0) throw new Error("The source file is empty.");
     const headers = rows[headerRowIndex].map(clean);
+    // Excel templates often carry untitled used-range columns after the last real header.
+    while (headers.length && headers[headers.length - 1] === "") headers.pop();
     const duplicates = headers.filter((header, index) => header && headers.indexOf(header) !== index);
     if (duplicates.length) throw new Error(`The source file contains duplicate columns: ${[...new Set(duplicates)].join(", ")}.`);
     const sourceLayout = sameHeaders(headers, FLUTE_HEADERS) ? "flute"
@@ -289,11 +291,28 @@
     return result;
   }
 
-  function convertPaperBagsRecord(source, settings) {
+  const PAPER_BAG_TYPES = Object.freeze({
+    standard: Object.freeze({ key: "PAPER-BAGS", reference: "Paper Bags", weight: 49, length: 24, width: 20, height: 11 }),
+    champsSmall: Object.freeze({ key: "CHAMPS-SMALL-BAGS", reference: "Small Champ Bags", weight: 28, length: 24, width: 16, height: 16 }),
+    champsLarge: Object.freeze({ key: "CHAMPS-LARGE-BAGS", reference: "Large Champ Bags", weight: 48, length: 24, width: 20, height: 20 })
+  });
+
+  // Champs bag files share the Paper Bags layout; only the filename says which bag size they are.
+  function paperBagTypeForFile(fileName) {
+    const name = clean(fileName).toUpperCase();
+    if (!/CHAMP/.test(name)) return PAPER_BAG_TYPES.standard;
+    const small = /\bSMALL\b/.test(name);
+    const large = /\bLARGE\b/.test(name);
+    if (small && !large) return PAPER_BAG_TYPES.champsSmall;
+    if (large && !small) return PAPER_BAG_TYPES.champsLarge;
+    throw new Error("This Champs bag file name must contain exactly one of SMALL or LARGE so the bag size can be determined. Rename the file and try again.");
+  }
+
+  function convertPaperBagsRecord(source, settings, bagType = PAPER_BAG_TYPES.standard) {
     const row = emptyFedExRow();
     Object.assign(row, {
       poNumber: "",
-      reference: "Paper Bags",
+      reference: bagType.reference,
       senderContactName: clean(settings.senderContactName),
       senderCompany: clean(settings.senderCompany),
       senderContactNumber: clean(settings.senderContactNumber),
@@ -317,11 +336,11 @@
       recipientCountry: "CA",
       packageType: clean(settings.packageType),
       numberOfPackages: clean(source.QTY),
-      packageWeight: 49,
+      packageWeight: bagType.weight,
       weightUnits: clean(settings.weightUnits),
-      length: 24,
-      width: 20,
-      height: 11,
+      length: bagType.length,
+      width: bagType.width,
+      height: bagType.height,
       currencyType: clean(settings.currencyType),
       serviceType: clean(settings.serviceType),
       ...FOOT_LOCKER_BILLING
@@ -331,7 +350,7 @@
       sourceOrder: "",
       sourceLine: "",
       docketId: "",
-      productKey: "PAPER-BAGS",
+      productKey: bagType.key,
       sourceLayout: "paperBags",
       validationProfile: "paperBags",
       fedex: row,
@@ -362,16 +381,17 @@
     return [...new Set(errors)];
   }
 
-  function convertCsv(text, settings) {
-    return convertRows(parseCsv(text), settings);
+  function convertCsv(text, settings, fileName) {
+    return convertRows(parseCsv(text), settings, fileName);
   }
 
-  function convertRows(rows, settings) {
+  function convertRows(rows, settings, fileName) {
     const sourceRows = rowsToObjects(rows);
     if (!sourceRows.length) throw new Error("The supported source layout contains headers but no shipment lines.");
     const effectiveSettings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+    const bagType = sourceRows[0].__sourceLayout === "paperBags" ? paperBagTypeForFile(fileName) : null;
     return sourceRows.map(source => source.__sourceLayout === "paperBags"
-      ? convertPaperBagsRecord(source, effectiveSettings)
+      ? convertPaperBagsRecord(source, effectiveSettings, bagType)
       : convertRecord(source, effectiveSettings, source.__sourceLayout));
   }
 
@@ -384,8 +404,8 @@
     return files.flatMap((file, fileIndex) => {
       try {
         const converted = Array.isArray(file.rows)
-          ? convertRows(file.rows, settings)
-          : convertCsv(file.text, settings);
+          ? convertRows(file.rows, settings, file.name)
+          : convertCsv(file.text, settings, file.name);
         return converted.map(row => ({ ...row, sourceFile: file.name, sourceFileIndex: fileIndex }));
       } catch (error) { throw new Error(`${file.name}: ${error.message}`); }
     });
@@ -442,6 +462,8 @@
     convertRows,
     convertRecord,
     convertPaperBagsRecord,
+    PAPER_BAG_TYPES,
+    paperBagTypeForFile,
     validateFedExRow,
     exportFedExCsv,
     normalizeCountry,

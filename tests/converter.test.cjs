@@ -220,4 +220,30 @@ const mixedLayouts = C.convertFiles([
 assert.equal(mixedLayouts.length, 8, "Both Flute layouts and Paper Bags files must combine into one batch");
 assert.equal(C.parseCsv(C.exportFedExCsv(mixedLayouts)).length, 9, "Mixed-layout output must contain exactly one header");
 
-console.log("Passed: strict order_jit_ships, order_confirmation, and Paper Bags schemas; CSV/XLS/XLSX conversion; province aliases; mixed batches; source tracking; and duplicate checks.");
+const specOf = row => [row.fedex.reference, row.fedex.packageWeight, row.fedex.length, row.fedex.width, row.fedex.height];
+const bagFile = name => C.convertFiles([{ name, type: "XLSX", rows: paperRows }])[0];
+assert.deepEqual(specOf(bagFile("Stesco Push 1 OCT - CHAMPS HOLIDAY PUSH 1 SMALL.xlsx")), ["Small Champ Bags", 28, 24, 16, 16]);
+assert.deepEqual(specOf(bagFile("Stesco Push 2 OCT - CHAMPS HOLIDAY PUSH 1 LARGE.xlsx")), ["Large Champ Bags", 48, 24, 20, 20]);
+assert.deepEqual(specOf(bagFile("stesco push champ bags small.csv")), ["Small Champ Bags", 28, 24, 16, 16], "Champs detection must ignore case");
+assert.deepEqual(specOf(bagFile("Stesco Push 3 OCT - HOLIDAY PUSH 1 LARGE.xlsx")), ["Paper Bags", 49, 24, 20, 11], "Non-Champs bag files keep the standard spec even when named LARGE");
+assert.equal(bagFile("Stesco Push 1 OCT - CHAMPS HOLIDAY PUSH 1 SMALL.xlsx").status, "ready");
+assert.throws(() => bagFile("Stesco Push OCT - CHAMPS HOLIDAY PUSH 1.xlsx"), /exactly one of SMALL or LARGE/, "A Champs file without a size must be rejected");
+assert.throws(() => bagFile("CHAMPS SMALL and LARGE.xlsx"), /exactly one of SMALL or LARGE/, "A Champs file naming both sizes must be rejected");
+assert.deepEqual(specOf(C.convertRows(paperRows, C.DEFAULT_SETTINGS)[0]), ["Paper Bags", 49, 24, 20, 11], "Calls without a file name keep the standard spec");
+
+const paddedPaperRows = paperRows.map((row, index) => index === 2 ? [...row, "", "", "", "", ""] : row.length ? [...row, "", "", "", "", "0"] : row);
+const padded = C.convertRows(paddedPaperRows, C.DEFAULT_SETTINGS);
+assert.equal(padded.length, 1, "Untitled trailing columns must not block a Paper Bags file");
+assert.deepEqual(padded[0].fedex, paper[0].fedex, "Untitled trailing columns must not change the mapping");
+assert.throws(
+  () => C.convertRows(paperRows.map((row, index) => index === 2 ? [...row, "Notes"] : row), C.DEFAULT_SETTINGS),
+  /layout does not match/,
+  "A named extra column must still block conversion"
+);
+assert.throws(
+  () => C.convertRows(paperRows.map((row, index) => index === 2 ? ["", ...row] : row), C.DEFAULT_SETTINGS),
+  /layout does not match/,
+  "A blank column before or between real headers must still block conversion"
+);
+
+console.log("Passed: strict order_jit_ships, order_confirmation, and Paper Bags schemas; Champs bag sizes from file names; CSV/XLS/XLSX conversion; province aliases; mixed batches; source tracking; and duplicate checks.");

@@ -42,8 +42,17 @@ The bundled SheetJS Community Edition reader handles legacy Excel 97–2003 `.xl
 - Product reference, weight, and dimensions come from the included Foot Locker product map.
 - Transportation charges are always billed to Foot Locker as `THIRD_PARTY` using FedEx account `263261577` through the `paymentType` and `payerAccountNumber` columns.
 - Paper Bags rows use `store # + Banner` as the recipient company, `Address` as address line 1, and `Store Name` as address line 2.
-- Paper Bags rows use `Store Manager` as the contact, `Paper Bags` as the reference, a blank PO, and Canada as the country.
-- Paper Bags `QTY` supplies the package count. Every package is 49 lb and 24 × 20 × 11 in.
+- Paper Bags rows use `Store Manager` as the contact, a blank PO, and Canada as the country.
+- Paper Bags `QTY` supplies the package count. The bag type, which sets the reference, weight per package, and dimensions, comes from the file name:
+
+  | File name contains | Reference | Weight | Dimensions (in) |
+  |---|---|---|---|
+  | `CHAMP` and `SMALL` | Small Champ Bags | 28 lb | 24 × 16 × 16 |
+  | `CHAMP` and `LARGE` | Large Champ Bags | 48 lb | 24 × 20 × 20 |
+  | no `CHAMP` | Paper Bags | 49 lb | 24 × 20 × 11 |
+
+  A `CHAMP` file name without exactly one of `SMALL` or `LARGE` is rejected, so a bag size is never guessed.
+- Untitled columns after the last Paper Bags header (left over in some Excel templates) are ignored.
 - Paper Bags province code `SASK` is normalized to `SK`; `div` and `Delivery Time (Days)` are intentionally ignored.
 - The downloaded file uses the configured FedEx headers in a stable order, including the two transportation-billing columns.
 
